@@ -77,6 +77,19 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
     private static final Logger logger = LoggerFactory.getLogger(AbstractInstanceRegistry.class);
 
     private static final String[] EMPTY_STR_ARRAY = new String[0];
+    // 内存注册表
+    /**
+     * {
+         * “ServiceA”: {
+         * “001”: Lease<InstanceInfo>,
+         * “002”: Lease<InstanceInfo>,
+         * “003”: Lease<InstanceInfo>
+         * },
+         * “ServiceB”: {
+         * “001”: Lease<InstanceInfo>
+         * }
+     * }
+     */
     private final ConcurrentHashMap<String, Map<String, Lease<InstanceInfo>>> registry
             = new ConcurrentHashMap<String, Map<String, Lease<InstanceInfo>>>();
     protected Map<String, RemoteRegionRegistry> regionNameVSRemoteRegistry = new HashMap<String, RemoteRegionRegistry>();
@@ -194,19 +207,25 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
      * @see com.netflix.eureka.lease.LeaseManager#register(java.lang.Object, int, boolean)
      */
     public void register(InstanceInfo registrant, int leaseDuration, boolean isReplication) {
-        read.lock();
+        read.lock(); // 读锁 - 多个服务实例可以来注册
         try {
+            // appName：serverA 服务名称
+            // 每次实例对应租约信息
             Map<String, Lease<InstanceInfo>> gMap = registry.get(registrant.getAppName());
             REGISTER.increment(isReplication);
-            if (gMap == null) {
+
+            if (gMap == null) { // 第一次注册
                 final ConcurrentHashMap<String, Lease<InstanceInfo>> gNewMap = new ConcurrentHashMap<String, Lease<InstanceInfo>>();
                 gMap = registry.putIfAbsent(registrant.getAppName(), gNewMap);
                 if (gMap == null) {
                     gMap = gNewMap;
                 }
             }
+            // registrant 服务实例
+            // 一个服务，对应多个服务实例，每个实例都有一个id
             Lease<InstanceInfo> existingLease = gMap.get(registrant.getId());
             // Retain the last dirty timestamp without overwriting it, if there is already a lease
+            // 之前注册过
             if (existingLease != null && (existingLease.getHolder() != null)) {
                 Long existingLastDirtyTimestamp = existingLease.getHolder().getLastDirtyTimestamp();
                 Long registrationLastDirtyTimestamp = registrant.getLastDirtyTimestamp();
@@ -235,16 +254,20 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
             if (existingLease != null) {
                 lease.setServiceUpTimestamp(existingLease.getServiceUpTimestamp());
             }
+            // 保存到注册表中
             gMap.put(registrant.getId(), lease);
+            // 保存最新注册服务的队列
             recentRegisteredQueue.add(new Pair<Long, String>(
                     System.currentTimeMillis(),
                     registrant.getAppName() + "(" + registrant.getId() + ")"));
             // This is where the initial state transfer of overridden status happens
+            // 服务实例状态
             if (!InstanceStatus.UNKNOWN.equals(registrant.getOverriddenStatus())) {
                 logger.debug("Found overridden status {} for instance {}. Checking to see if needs to be add to the "
                                 + "overrides", registrant.getOverriddenStatus(), registrant.getId());
                 if (!overriddenInstanceStatusMap.containsKey(registrant.getId())) {
                     logger.info("Not found overridden id {} and hence adding it", registrant.getId());
+                    // 保存服务实例状态
                     overriddenInstanceStatusMap.put(registrant.getId(), registrant.getOverriddenStatus());
                 }
             }
@@ -259,6 +282,7 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
             registrant.setStatusWithoutDirty(overriddenInstanceStatus);
 
             // If the lease is registered with UP status, set lease service up timestamp
+            // 设置租约信息最新信息，serviceUpTimestamp 更新服务注册时间
             if (InstanceStatus.UP.equals(registrant.getStatus())) {
                 lease.serviceUp();
             }

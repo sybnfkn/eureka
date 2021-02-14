@@ -63,6 +63,7 @@ class InstanceInfoReplicator implements Runnable {
     public void start(int initialDelayMs) {
         if (started.compareAndSet(false, true)) {
             instanceInfo.setIsDirty();  // for initial register
+            // 40s之后开始线程执行
             Future next = scheduler.schedule(this, initialDelayMs, TimeUnit.SECONDS);
             scheduledPeriodicRef.set(next);
         }
@@ -114,11 +115,15 @@ class InstanceInfoReplicator implements Runnable {
 
     public void run() {
         try {
+            // 刷新服务实例信息，刷新服务实例配置，如果改变了就刷新下
+            // 用健康检查起检查下状态，将服务实例状态更新
             discoveryClient.refreshInstanceInfo();
 
             Long dirtyTimestamp = instanceInfo.isDirtyWithTime();
             if (dirtyTimestamp != null) {
+                // 进行注册
                 discoveryClient.register();
+                // 重置
                 instanceInfo.unsetIsDirty(dirtyTimestamp);
             }
         } catch (Throwable t) {

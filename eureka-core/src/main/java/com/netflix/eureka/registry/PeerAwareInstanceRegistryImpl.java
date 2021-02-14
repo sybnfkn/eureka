@@ -407,9 +407,11 @@ public class PeerAwareInstanceRegistryImpl extends AbstractInstanceRegistry impl
     public void register(final InstanceInfo info, final boolean isReplication) {
         int leaseDuration = Lease.DEFAULT_DURATION_IN_SECS;
         if (info.getLeaseInfo() != null && info.getLeaseInfo().getDurationInSecs() > 0) {
+            // 默认90，
             leaseDuration = info.getLeaseInfo().getDurationInSecs();
         }
         super.register(info, leaseDuration, isReplication);
+        // 服务实例信息同步其他eureka
         replicateToPeers(Action.Register, info.getAppName(), info.getId(), info, null, isReplication);
     }
 

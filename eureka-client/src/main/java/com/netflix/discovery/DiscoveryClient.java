@@ -489,6 +489,8 @@ public class DiscoveryClient implements EurekaClient {
         // 每隔一定时间（默认是30s），去执行一个CacheRefreshThread，给放那个调度线程池里去了；
         // 如果要向eureka server进行注册的话，会搞一个定时任务，每隔一定时间发送心跳，执行一个HeartbeatThread；
         // 创建了服务实例副本传播器，将自己作为一个定时任务进行调度；创建了服务实例的状态变更的监听器，如果你配置了监听，那么就会注册监听器
+
+        // 服务注册在这里
         initScheduledTasks();
 
         try {
@@ -884,12 +886,14 @@ public class DiscoveryClient implements EurekaClient {
     }
 
     /**
-     * Register with the eureka service by making the appropriate REST call.
+     * Register with the eureka service by making the appropriate REST call.、
+     * 发送http请求
      */
     boolean register() throws Throwable {
         logger.info(PREFIX + "{}: registering service...", appPathIdentifier);
         EurekaHttpResponse<Void> httpResponse;
         try {
+            // http请求server
             httpResponse = eurekaTransport.registrationClient.register(instanceInfo);
         } catch (Exception e) {
             logger.warn(PREFIX + "{} - registration failed {}", appPathIdentifier, e.getMessage(), e);
@@ -1375,7 +1379,8 @@ public class DiscoveryClient implements EurekaClient {
                 applicationInfoManager.registerStatusChangeListener(statusChangeListener);
             }
 
-            // 服务实例副本传播线程
+            // 服务实例副本传播线程 服务注册在这里
+            // InitialInstanceInfoReplicationIntervalSeconds 隔多长时间将注册信息复制到服务 默认40s
             instanceInfoReplicator.start(clientConfig.getInitialInstanceInfoReplicationIntervalSeconds());
         } else {
             logger.info("Not registering with Eureka server per configuration");
@@ -1455,6 +1460,7 @@ public class DiscoveryClient implements EurekaClient {
 
         InstanceStatus status;
         try {
+            // 获取当前服务状态
             status = getHealthCheckHandler().getStatus(instanceInfo.getStatus());
         } catch (Exception e) {
             logger.warn("Exception from healthcheckHandler.getStatus, setting status to DOWN", e);
