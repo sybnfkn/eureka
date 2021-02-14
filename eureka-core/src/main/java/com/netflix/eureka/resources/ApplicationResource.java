@@ -124,9 +124,13 @@ public class ApplicationResource {
      * @param id
      *            the unique identifier of the instance.
      * @return information about a particular instance.
+     *
+     *
+     *  心跳续约
      */
     @Path("{id}")
     public InstanceResource getInstanceInfo(@PathParam("id") String id) {
+        // put请求
         return new InstanceResource(this, id, serverConfig, registry);
     }
 

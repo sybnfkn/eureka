@@ -128,6 +128,7 @@ public abstract class AbstractJersey2EurekaHttpClient implements EurekaHttpClien
 
     @Override
     public EurekaHttpResponse<InstanceInfo> sendHeartBeat(String appName, String id, InstanceInfo info, InstanceStatus overriddenStatus) {
+
         String urlPath = "apps/" + appName + '/' + id;
         Response response = null;
         try {
