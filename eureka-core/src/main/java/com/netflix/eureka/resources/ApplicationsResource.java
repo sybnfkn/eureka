@@ -63,6 +63,9 @@ public class ApplicationsResource {
 
     private final EurekaServerConfig serverConfig;
     private final PeerAwareInstanceRegistry registry;
+    /**
+     * 缓存机制
+     */
     private final ResponseCache responseCache;
 
     @Inject
@@ -113,6 +116,7 @@ public class ApplicationsResource {
      * @return a response containing information about all {@link com.netflix.discovery.shared.Applications}
      *         from the {@link AbstractInstanceRegistry}.
      */
+    // 获取全量注册表
     @GET
     public Response getContainers(@PathParam("version") String version,
                                   @HeaderParam(HEADER_ACCEPT) String acceptHeader,
@@ -191,6 +195,7 @@ public class ApplicationsResource {
      * @param uriInfo  the {@link java.net.URI} information of the request made.
      * @return response containing the delta information of the
      *         {@link AbstractInstanceRegistry}.
+     *  增量抓取
      */
     @Path("delta")
     @GET
@@ -239,6 +244,7 @@ public class ApplicationsResource {
                     .header(HEADER_CONTENT_TYPE, returnMediaType)
                     .build();
         } else {
+            // 获取
             response = Response.ok(responseCache.get(cacheKey)).build();
         }
 

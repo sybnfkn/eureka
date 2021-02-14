@@ -449,7 +449,7 @@ public class DiscoveryClient implements EurekaClient {
 
         if (clientConfig.shouldFetchRegistry()) {
             try {
-                //
+                // 抓取注册信息
                 boolean primaryFetchRegistryResult = fetchRegistry(false);
                 if (!primaryFetchRegistryResult) {
                     logger.info("Initial registry fetch from primary servers failed");
@@ -1009,6 +1009,8 @@ public class DiscoveryClient implements EurekaClient {
      * @param forceFullRegistryFetch Forces a full registry fetch.
      *
      * @return true if the registry was fetched
+     *
+     * 抓取注册信息
      */
     private boolean fetchRegistry(boolean forceFullRegistryFetch) {
         Stopwatch tracer = FETCH_REGISTRY_TIMER.start();
@@ -1020,8 +1022,8 @@ public class DiscoveryClient implements EurekaClient {
 
             if (clientConfig.shouldDisableDelta()
                     || (!Strings.isNullOrEmpty(clientConfig.getRegistryRefreshSingleVipAddress()))
-                    || forceFullRegistryFetch
-                    || (applications == null)
+                    || forceFullRegistryFetch // false
+                    || (applications == null) // 之前本地已经抓取过一次 所以也是false
                     || (applications.getRegisteredApplications().size() == 0)
                     || (applications.getVersion() == -1)) //Client application does not have latest library supporting delta
             {
@@ -1034,6 +1036,7 @@ public class DiscoveryClient implements EurekaClient {
                 logger.info("Application version is -1: {}", (applications.getVersion() == -1));
                 getAndStoreFullRegistry();
             } else {
+                // 增量抓取
                 getAndUpdateDelta(applications);
             }
             applications.setAppsHashCode(applications.getReconcileHashCode());
@@ -1151,7 +1154,7 @@ public class DiscoveryClient implements EurekaClient {
      */
     private void getAndUpdateDelta(Applications applications) throws Throwable {
         long currentUpdateGeneration = fetchRegistryGeneration.get();
-
+        // 增量信息
         Applications delta = null;
         EurekaHttpResponse<Applications> httpResponse = eurekaTransport.queryClient.getDelta(remoteRegionsRef.get());
         if (httpResponse.getStatusCode() == Status.OK.getStatusCode()) {
@@ -1167,7 +1170,11 @@ public class DiscoveryClient implements EurekaClient {
             String reconcileHashCode = "";
             if (fetchRegistryUpdateLock.tryLock()) {
                 try {
+                    // 更新增量注册表
                     updateDelta(delta);
+                    /**
+                     * 对更新完合并完以后的注册表，会计算一个hash值；
+                     */
                     reconcileHashCode = getReconcileHashCode(applications);
                 } finally {
                     fetchRegistryUpdateLock.unlock();
@@ -1175,6 +1182,11 @@ public class DiscoveryClient implements EurekaClient {
             } else {
                 logger.warn("Cannot acquire update lock, aborting getAndUpdateDelta");
             }
+            /**
+             * delta，带了一个eureka server端的全量注册表的hash值；
+            * 此时会将eureka client端的合并完的注册表的hash值，跟eureka server端的全量注册表的hash值进行一个比对；
+            * 如果说不一样的话，说明本地注册表跟server端不一样了，此时就会重新从eureka server拉取全量的注册表到本地来更新到缓存里去
+             */
             // There is a diff in number of instances for some reason
             if (!reconcileHashCode.equals(delta.getAppsHashCode()) || clientConfig.shouldLogDeltaDiff()) {
                 reconcileAndLogDifference(delta, reconcileHashCode);  // this makes a remoteCall
@@ -1259,6 +1271,7 @@ public class DiscoveryClient implements EurekaClient {
         int deltaCount = 0;
         for (Application app : delta.getRegisteredApplications()) {
             for (InstanceInfo instance : app.getInstances()) {
+                // 本地缓存注册表
                 Applications applications = getApplications();
                 String instanceRegion = instanceRegionChecker.getInstanceRegion(instance);
                 if (!instanceRegionChecker.isLocalRegion(instanceRegion)) {
@@ -1278,7 +1291,7 @@ public class DiscoveryClient implements EurekaClient {
                     }
                     logger.debug("Added instance {} to the existing apps in region {}", instance.getId(), instanceRegion);
                     applications.getRegisteredApplications(instance.getAppName()).addInstance(instance);
-                } else if (ActionType.MODIFIED.equals(instance.getActionType())) {
+                } else if (ActionType.MODIFIED.equals(instance.getActionType())) { // 修改
                     Application existingApp = applications.getRegisteredApplications(instance.getAppName());
                     if (existingApp == null) {
                         applications.addApplication(app);
@@ -1287,7 +1300,7 @@ public class DiscoveryClient implements EurekaClient {
 
                     applications.getRegisteredApplications(instance.getAppName()).addInstance(instance);
 
-                } else if (ActionType.DELETED.equals(instance.getActionType())) {
+                } else if (ActionType.DELETED.equals(instance.getActionType())) { // 删除
                     Application existingApp = applications.getRegisteredApplications(instance.getAppName());
                     if (existingApp != null) {
                         logger.debug("Deleted instance {} to the existing apps ", instance.getId());
@@ -1305,6 +1318,9 @@ public class DiscoveryClient implements EurekaClient {
         }
         logger.debug("The total number of instances fetched by the delta processor : {}", deltaCount);
 
+        /**
+         *
+         */
         getApplications().setVersion(delta.getVersion());
         getApplications().shuffleInstances(clientConfig.shouldFilterOnlyUpInstances());
 

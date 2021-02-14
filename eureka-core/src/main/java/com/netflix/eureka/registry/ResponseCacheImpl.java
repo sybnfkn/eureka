@@ -127,8 +127,10 @@ public class ResponseCacheImpl implements ResponseCache {
         this.registry = registry;
 
         long responseCacheUpdateIntervalMs = serverConfig.getResponseCacheUpdateIntervalMs();
+        // 构建
         this.readWriteCacheMap =
                 CacheBuilder.newBuilder().initialCapacity(serverConfig.getInitialCapacityOfResponseCache())
+                        // 默认180s过期
                         .expireAfterWrite(serverConfig.getResponseCacheAutoExpirationInSeconds(), TimeUnit.SECONDS)
                         .removalListener(new RemovalListener<Key, Value>() {
                             @Override
@@ -152,7 +154,16 @@ public class ResponseCacheImpl implements ResponseCache {
                             }
                         });
 
+        /**
+         * 每隔30s，执行定时任务，对readonlycachemap和readwritecachemap进行对比
+         * 如果不想等，将readwritecachemap 放到 readonlycachemap
+         *
+         * 比如readwritecachemap中，ALL_APPS这个key对应缓存没了，最多30s会同步到readonlycachemap 中去
+         *
+         * 假设服务实例注册，下线，故障 可能30s才会感知到。
+         */
         if (shouldUseReadOnlyResponseCache) {
+
             timer.schedule(getCacheUpdateTask(),
                     new Date(((System.currentTimeMillis() / responseCacheUpdateIntervalMs) * responseCacheUpdateIntervalMs)
                             + responseCacheUpdateIntervalMs),
@@ -251,6 +262,7 @@ public class ResponseCacheImpl implements ResponseCache {
     public void invalidate(String appName, @Nullable String vipAddress, @Nullable String secureVipAddress) {
         for (Key.KeyType type : Key.KeyType.values()) {
             for (Version v : Version.values()) {
+                // 将readwritecachemap中all_apps缓存key，对应缓存过期掉
                 invalidate(
                         new Key(Key.EntityType.Application, appName, type, v, EurekaAccept.full),
                         new Key(Key.EntityType.Application, appName, type, v, EurekaAccept.compact),
@@ -348,15 +360,23 @@ public class ResponseCacheImpl implements ResponseCache {
     /**
      * Get the payload in both compressed and uncompressed form.
      */
+    /**
+     *
+     * @param key
+     * @param useReadOnlyCache
+     * @return
+     */
     @VisibleForTesting
     Value getValue(final Key key, boolean useReadOnlyCache) {
         Value payload = null;
         try {
             if (useReadOnlyCache) {
+                // 只读缓存
                 final Value currentPayload = readOnlyCacheMap.get(key);
                 if (currentPayload != null) {
                     payload = currentPayload;
                 } else {
+                    // 读写缓存
                     payload = readWriteCacheMap.get(key);
                     readOnlyCacheMap.put(key, payload);
                 }
@@ -423,11 +443,15 @@ public class ResponseCacheImpl implements ResponseCache {
                             tracer = serializeAllAppsTimer.start();
                             payload = getPayLoad(key, registry.getApplications());
                         }
-                    } else if (ALL_APPS_DELTA.equals(key.getName())) {
+                    } else if (ALL_APPS_DELTA.equals(key.getName())) { // 抓取增量
                         if (isRemoteRegionRequested) {
                             tracer = serializeDeltaAppsWithRemoteRegionTimer.start();
                             versionDeltaWithRegions.incrementAndGet();
                             versionDeltaWithRegionsLegacy.incrementAndGet();
+                            // getApplicationDeltasFromMultipleRegions获取增量注册表
+                            /**
+                             * 返回最新3分钟发生变化的服务实例
+                             */
                             payload = getPayLoad(key,
                                     registry.getApplicationDeltasFromMultipleRegions(key.getRegions()));
                         } else {
