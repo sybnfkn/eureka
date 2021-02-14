@@ -70,7 +70,7 @@ import static com.netflix.eureka.Names.METRIC_REGISTRY_PREFIX;
  * Primary operations that are replicated are the
  * <em>Registers,Renewals,Cancels,Expirations and Status Changes</em>
  * </p>
- *
+ *  eureka server启动，尝试从其他server抓取注册表信息，如果抓取失败，就不会让其他服务器实例来自己这里进行服务发现，获取自己注册表信息
  * <p>
  * When the eureka server starts up it tries to fetch all the registry
  * information from the peer eureka nodes.If for some reason this operation
@@ -79,7 +79,7 @@ import static com.netflix.eureka.Names.METRIC_REGISTRY_PREFIX;
  * {@link com.netflix.eureka.EurekaServerConfig#getWaitTimeInMsWhenSyncEmpty()}.
  * </p>
  *
- * <p>
+ * <p> 如果server获取心跳比例低于一定比例，那么自动认为自己出现网络故障，不会将那些没有收到心跳的服务节点摘除，进入自我保护机制
  * One important thing to note about <em>renewals</em>.If the renewal drops more
  * than the specified threshold as specified in
  * {@link com.netflix.eureka.EurekaServerConfig#getRenewalPercentThreshold()} within a period of
@@ -90,6 +90,7 @@ import static com.netflix.eureka.Names.METRIC_REGISTRY_PREFIX;
  * @author Karthik Ranganathan, Greg Kim
  *
  */
+//
 @Singleton
 public class PeerAwareInstanceRegistryImpl extends AbstractInstanceRegistry implements PeerAwareInstanceRegistry {
     private static final Logger logger = LoggerFactory.getLogger(PeerAwareInstanceRegistryImpl.class);
