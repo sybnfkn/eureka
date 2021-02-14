@@ -274,6 +274,7 @@ public class InstanceResource {
      *            replicated from other nodes.
      * @return response indicating whether the operation was a success or
      *         failure.
+     *  取消租约
      */
     @DELETE
     public Response cancelLease(

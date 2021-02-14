@@ -337,8 +337,10 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
             Map<String, Lease<InstanceInfo>> gMap = registry.get(appName);
             Lease<InstanceInfo> leaseToCancel = null;
             if (gMap != null) {
+                // 从注册表删除
                 leaseToCancel = gMap.remove(id);
             }
+            // 将服务实例添加到最近下线queue中
             recentCanceledQueue.add(new Pair<Long, String>(System.currentTimeMillis(), appName + "(" + id + ")"));
             InstanceStatus instanceStatus = overriddenInstanceStatusMap.remove(id);
             if (instanceStatus != null) {
@@ -349,17 +351,27 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
                 logger.warn("DS: Registry: cancel failed because Lease is not registered for: {}/{}", appName, id);
                 return false;
             } else {
+                // 保存服务实例被清理掉，服务实例下线时间戳
                 leaseToCancel.cancel();
                 InstanceInfo instanceInfo = leaseToCancel.getHolder();
                 String vip = null;
                 String svip = null;
                 if (instanceInfo != null) {
+                    // 设置删除
                     instanceInfo.setActionType(ActionType.DELETED);
+                    // 添加到最近变化队列中，让所有client下次拉取增量注册表时候，可以拉取服务实例下线的这个变化
                     recentlyChangedQueue.add(new RecentlyChangedItem(leaseToCancel));
-                    instanceInfo.setLastUpdatedTimestamp();
+                    // 设置服务实例最近变更时间戳
+                    instanceInfo.setLastUpdatedTimestamp(); //
                     vip = instanceInfo.getVIPAddress();
                     svip = instanceInfo.getSecureVipAddress();
                 }
+                // 过期掉注册表缓存，从readWriteCacheMap中清理掉
+                /**
+                 * 定时过期的一个过程，就是有一个定时的任务，每隔30秒，将readWriteCacheMap和readOnlyCacheMap进行一个同步
+                 * 下次所有的eureka client来拉取增量注册表的时候，都会发现readOnlyCacheMap里没有，
+                 * 会找readWriteCacheMap也会发现没有，然后就会从注册表里抓取增量注册表，此时就会将上面那个recentCHangedQuuee中的记录返回
+                 */
                 invalidateCache(appName, vip, svip);
                 logger.info("Cancelled instance {}/{} (replication={})", appName, id, isReplication);
             }

@@ -949,6 +949,7 @@ public class DiscoveryClient implements EurekaClient {
     /**
      * Shuts down Eureka Client. Also sends a deregistration request to the
      * eureka server.
+     * 主动关闭
      */
     @PreDestroy
     @Override
@@ -960,13 +961,16 @@ public class DiscoveryClient implements EurekaClient {
                 applicationInfoManager.unregisterStatusChangeListener(statusChangeListener.getId());
             }
 
+            // 将线程池shutdown，释放资源
             cancelScheduledTasks();
 
             // If APPINFO was registered
             if (applicationInfoManager != null
                     && clientConfig.shouldRegisterWithEureka()
                     && clientConfig.shouldUnregisterOnShutdown()) {
+                // 服务实例状态down
                 applicationInfoManager.setInstanceStatus(InstanceStatus.DOWN);
+                // 真正shutdown
                 unregister();
             }
 
@@ -991,6 +995,7 @@ public class DiscoveryClient implements EurekaClient {
         if(eurekaTransport != null && eurekaTransport.registrationClient != null) {
             try {
                 logger.info("Unregistering ...");
+                //
                 EurekaHttpResponse<Void> httpResponse = eurekaTransport.registrationClient.cancel(instanceInfo.getAppName(), instanceInfo.getId());
                 logger.info(PREFIX + "{} - deregister  status: {}", appPathIdentifier, httpResponse.getStatusCode());
             } catch (Exception e) {
