@@ -113,6 +113,7 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
 
     private Timer deltaRetentionTimer = new Timer("Eureka-DeltaRetentionTimer", true);
     private Timer evictionTimer = new Timer("Eureka-EvictionTimer", true);
+    // 上一分钟心跳个数
     private final MeasuredRate renewsLastMin;
 
     private final AtomicReference<EvictionTask> evictionTaskRef = new AtomicReference<EvictionTask>();
@@ -138,7 +139,7 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
         // 最近注册实例
         this.recentRegisteredQueue = new CircularQueue<Pair<Long, String>>(1000);
 
-        //
+        // 计算上一分钟心跳次数的定时任务
         this.renewsLastMin = new MeasuredRate(1000 * 60 * 1);
         /**
          * 默认30s一次，看下服务实例变更记录，是否在队列中停留180s
@@ -249,6 +250,7 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
                 synchronized (lock) {
                     if (this.expectedNumberOfClientsSendingRenews > 0) {
                         // Since the client wants to register it, increase the number of clients sending renews
+                        // 自我保护机制：服务注册，expectedNumberOfClientsSendingRenews + 1 就是新增1台机器
                         this.expectedNumberOfClientsSendingRenews = this.expectedNumberOfClientsSendingRenews + 1;
                         updateRenewsPerMinThreshold();
                     }
@@ -379,6 +381,9 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
             read.unlock();
         }
 
+        /**
+         * 自我保护：下线expectedNumberOfClientsSendingRenews 机器数量-1
+         */
         synchronized (lock) {
             if (this.expectedNumberOfClientsSendingRenews > 0) {
                 // Since the client wants to cancel it, reduce the number of clients to send renews.
@@ -430,6 +435,9 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
 
                 }
             }
+
+            // 自我保护：每次心跳，会将
+            // 记录每分钟实际心跳次数
             renewsLastMin.increment();
             // do it 更新最近时间戳
             leaseToRenew.renew();
@@ -636,6 +644,7 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
     public void evict(long additionalLeaseMs) {
         logger.debug("Running the evict task");
 
+        // 自我保护机制代码 ，判断是否启动自我保护机制
         if (!isLeaseExpirationEnabled()) {
             logger.debug("DS: lease expiration is currently disabled.");
             return;
@@ -1236,10 +1245,13 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
         responseCache.invalidate(appName, vipAddress, secureVipAddress);
     }
 
+    /**
+     * 服务实例个数 * （60 / 心跳时间间隔） * 0.85 = 每分钟最少的心跳次数。
+     */
     protected void updateRenewsPerMinThreshold() {
-        this.numberOfRenewsPerMinThreshold = (int) (this.expectedNumberOfClientsSendingRenews
-                * (60.0 / serverConfig.getExpectedClientRenewalIntervalSeconds())
-                * serverConfig.getRenewalPercentThreshold());
+        this.numberOfRenewsPerMinThreshold = (int) (this.expectedNumberOfClientsSendingRenews // 从别人的机器同步的client实例数量
+                * (60.0 / serverConfig.getExpectedClientRenewalIntervalSeconds()) // 期望客户端发送心跳间隔，默认30s，客户端可以自己调整哦 默认60/30 = 2
+                * serverConfig.getRenewalPercentThreshold()); // 0.85
     }
 
     private static final class RecentlyChangedItem {

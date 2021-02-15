@@ -111,7 +111,7 @@ public class EurekaClientServerRestIntegrationTest {
         InstanceInfo instanceInfo = instanceInfoIt.next();
         EurekaHttpResponse<Void> httpResponse = jerseyEurekaClient.register(instanceInfo);
 
-        Thread.sleep(Long.MAX_VALUE);
+//        Thread.sleep(Long.MAX_VALUE);
 
         assertThat(httpResponse.getStatusCode(), is(equalTo(204)));
     }

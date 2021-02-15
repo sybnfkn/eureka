@@ -121,12 +121,12 @@ public class ExampleEurekaClient {
         String myServiceUrl = "http://" + myHostName + ":8080/v2/";
 
         System.setProperty("eureka.region", "default");
-        System.setProperty("eureka.name", "eureka");
+        System.setProperty("eureka.name", "serverA");
         System.setProperty("eureka.vipAddress", "eureka.mydomain.net");
         System.setProperty("eureka.port", "8080");
         System.setProperty("eureka.preferSameZone", "false");
         System.setProperty("eureka.shouldUseDns", "false");
-        System.setProperty("eureka.shouldFetchRegistry", "false");
+        System.setProperty("eureka.shouldFetchRegistry", "true");
         System.setProperty("eureka.serviceUrl.defaultZone", myServiceUrl);
         System.setProperty("eureka.serviceUrl.default.defaultZone", myServiceUrl);
         System.setProperty("eureka.awsAccessId", "fake_aws_access_id");

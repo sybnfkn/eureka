@@ -161,6 +161,7 @@ public class ApplicationsResource {
                     .header(HEADER_CONTENT_TYPE, returnMediaType)
                     .build();
         } else {
+            //
             response = Response.ok(responseCache.get(cacheKey))
                     .build();
         }
@@ -232,7 +233,7 @@ public class ApplicationsResource {
         }
 
         Key cacheKey = new Key(Key.EntityType.Application,
-                ResponseCacheImpl.ALL_APPS_DELTA,
+                ResponseCacheImpl.ALL_APPS_DELTA, // 增量
                 keyType, CurrentRequestVersion.get(), EurekaAccept.fromString(eurekaAccept), regions
         );
 

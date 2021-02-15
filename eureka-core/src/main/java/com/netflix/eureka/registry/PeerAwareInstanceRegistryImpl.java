@@ -153,6 +153,9 @@ public class PeerAwareInstanceRegistryImpl extends AbstractInstanceRegistry impl
         this.numberOfReplicationsLastMin.start();
         this.peerEurekaNodes = peerEurekaNodes;
         initializedResponseCache();
+        // 初始化，自我保护 定时调度任务 每隔15分钟
+        // 算一下服务实例的数量，如果从别的eureka server拉取到的服务实例的数量，
+        // 大于当前的服务实例的数量，会重新计算一下，主要是跟其他的eureka server做一下同步
         scheduleRenewalThresholdUpdateTask();
         initRemoteRegionRegistry();
 
@@ -190,6 +193,9 @@ public class PeerAwareInstanceRegistryImpl extends AbstractInstanceRegistry impl
      * dramatically because of network partition and to protect expiring too
      * many instances at a time.
      *
+     * 自我保护：
+     *默认是15分钟，会跑一次定时任务，算一下服务实例的数量，如果从别的eureka server拉取到的服务实例的数量，
+     * 大于当前的服务实例的数量，会重新计算一下，主要是跟其他的eureka server做一下同步
      */
     private void scheduleRenewalThresholdUpdateTask() {
         timer.schedule(new TimerTask() {
@@ -220,10 +226,12 @@ public class PeerAwareInstanceRegistryImpl extends AbstractInstanceRegistry impl
                     break;
                 }
             }
+            // 将自己作为client从其他节点拉取全量注册表
             Applications apps = eurekaClient.getApplications();
             for (Application app : apps.getRegisteredApplications()) {
                 for (InstanceInfo instance : app.getInstances()) {
                     try {
+                        // 别人的服务实例是否在自己本地注册，如果没有注册，就注册到自己本地
                         if (isRegisterable(instance)) {
                             register(instance, instance.getLeaseInfo().getDurationInSecs(), true);
                             count++;
@@ -234,6 +242,7 @@ public class PeerAwareInstanceRegistryImpl extends AbstractInstanceRegistry impl
                 }
             }
         }
+        // 返回从别人server拉取的client实例的个数
         return count;
     }
 
@@ -241,6 +250,7 @@ public class PeerAwareInstanceRegistryImpl extends AbstractInstanceRegistry impl
     public void openForTraffic(ApplicationInfoManager applicationInfoManager, int count) {
         // Renewals happen every 30 seconds and for a minute it should be a factor of 2.
         this.expectedNumberOfClientsSendingRenews = count;
+        // numberOfRenewsPerMinThreshold 计算，进行自我保护的阈值
         updateRenewsPerMinThreshold();
         logger.info("Got {} instances from neighboring DS node", count);
         logger.info("Renew threshold is: {}", numberOfRenewsPerMinThreshold);
@@ -482,10 +492,13 @@ public class PeerAwareInstanceRegistryImpl extends AbstractInstanceRegistry impl
 
     @Override
     public boolean isLeaseExpirationEnabled() {
-        if (!isSelfPreservationModeEnabled()) {
+        if (!isSelfPreservationModeEnabled()) { // 默认配置是true
             // The self preservation mode is disabled, hence allowing the instances to expire.
             return true;
         }
+        // numberOfRenewsPerMinThreshold 期望一分钟多少次心跳
+        // getNumOfRenewsInLastMin 上一分钟所有服务实例发送过来多少心跳
+        // 如果上一次心跳次数太少，少于期望，返回false
         return numberOfRenewsPerMinThreshold > 0 && getNumOfRenewsInLastMin() > numberOfRenewsPerMinThreshold;
     }
 
@@ -534,6 +547,7 @@ public class PeerAwareInstanceRegistryImpl extends AbstractInstanceRegistry impl
      */
     private void updateRenewalThreshold() {
         try {
+            // 从其他server拿到服务实例的个数
             Applications apps = eurekaClient.getApplications();
             int count = 0;
             for (Application app : apps.getRegisteredApplications()) {
@@ -546,8 +560,10 @@ public class PeerAwareInstanceRegistryImpl extends AbstractInstanceRegistry impl
             synchronized (lock) {
                 // Update threshold only if the threshold is greater than the
                 // current expected threshold or if self preservation is disabled.
+                // 自我保护 ：仅当阈值大于当前的预期阈值 或 禁用自我保存时才更新阈值。
                 if ((count) > (serverConfig.getRenewalPercentThreshold() * expectedNumberOfClientsSendingRenews)
                         || (!this.isSelfPreservationModeEnabled())) {
+
                     this.expectedNumberOfClientsSendingRenews = count;
                     updateRenewsPerMinThreshold();
                 }

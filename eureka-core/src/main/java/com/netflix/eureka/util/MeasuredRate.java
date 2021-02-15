@@ -39,6 +39,7 @@ public class MeasuredRate {
 
     /**
      * @param sampleInterval in milliseconds
+     *                       一分钟一次
      */
     public MeasuredRate(long sampleInterval) {
         this.sampleInterval = sampleInterval;
@@ -46,6 +47,7 @@ public class MeasuredRate {
         this.isActive = false;
     }
 
+    // 一分钟一次
     public synchronized void start() {
         if (!isActive) {
             timer.schedule(new TimerTask() {
@@ -54,6 +56,9 @@ public class MeasuredRate {
                 public void run() {
                     try {
                         // Zero out the current bucket.
+                        // 每分钟跑一次
+                        // 将当前currentBucket 设置到lastBucket
+                        // 这样就统计出来，上一分钟心跳的个数
                         lastBucket.set(currentBucket.getAndSet(0));
                     } catch (Throwable e) {
                         logger.error("Cannot reset the Measured Rate", e);
@@ -81,6 +86,7 @@ public class MeasuredRate {
 
     /**
      * Increments the count in the current sample interval.
+     * 每次心跳加1
      */
     public void increment() {
         currentBucket.incrementAndGet();
