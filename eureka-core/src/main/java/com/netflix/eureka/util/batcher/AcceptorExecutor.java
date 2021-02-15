@@ -186,6 +186,7 @@ class AcceptorExecutor<ID, T> {
             long scheduleTime = 0;
             while (!isShutdown.get()) {
                 try {
+                    // 集群同步批处理，不断从processingOrder取请求
                     drainInputQueues();
 
                     int totalItems = processingOrder.size();
@@ -293,10 +294,12 @@ class AcceptorExecutor<ID, T> {
         }
 
         void assignBatchWork() {
+            // 集群同步批处理
             if (hasEnoughTasksForNextBatch()) {
                 if (batchWorkRequests.tryAcquire(1)) {
                     long now = System.currentTimeMillis();
                     int len = Math.min(maxBatchingSize, processingOrder.size());
+                    // 批大小
                     List<TaskHolder<ID, T>> holders = new ArrayList<>(len);
                     while (holders.size() < len && !processingOrder.isEmpty()) {
                         ID id = processingOrder.poll();
@@ -311,6 +314,7 @@ class AcceptorExecutor<ID, T> {
                         batchWorkRequests.release();
                     } else {
                         batchSizeMetric.record(holders.size(), TimeUnit.MILLISECONDS);
+                        // 批处理任务，放入批处理队列
                         batchWorkQueue.add(holders);
                     }
                 }
