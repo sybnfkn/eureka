@@ -84,6 +84,7 @@ public class PeerEurekaNodes {
                 }
         );
         try {
+            // resolvePeerUrls解析配置文件中其他eureka server url地址
             updatePeerEurekaNodes(resolvePeerUrls());
             Runnable peersUpdateTask = new Runnable() {
                 @Override
@@ -96,9 +97,12 @@ public class PeerEurekaNodes {
 
                 }
             };
+            /**
+             * 启动一个后台的线程，默认是每隔10分钟，会运行一个任务，就是基于配置文件中的url来刷新eureka server列表。
+             */
             taskExecutor.scheduleWithFixedDelay(
                     peersUpdateTask,
-                    serverConfig.getPeerEurekaNodesUpdateIntervalMs(),
+                    serverConfig.getPeerEurekaNodesUpdateIntervalMs(), // 每隔10分钟
                     serverConfig.getPeerEurekaNodesUpdateIntervalMs(),
                     TimeUnit.MILLISECONDS
             );
@@ -182,6 +186,10 @@ public class PeerEurekaNodes {
             }
         }
 
+        /**
+         * url地址构造一个一个的PeerEurekaNode，一个PeerEurekaNode就代表了一个eureka server。
+         * 启动一个后台的线程，默认是每隔10分钟，会运行一个任务，就是基于配置文件中的url来刷新eureka server列表。
+         */
         // Add new peers
         if (!toAdd.isEmpty()) {
             logger.info("Adding new peer nodes {}", toAdd);

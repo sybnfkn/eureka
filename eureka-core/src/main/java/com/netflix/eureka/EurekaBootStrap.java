@@ -240,6 +240,9 @@ public class EurekaBootStrap implements ServletContextListener {
         // 处理peer节点相关事情
         // PeerEurekaNodes，代表了eureka server集群，peers大概来说多个相同的实例组成的一个集群，peer就是peers集群中的一个实例，
         // PeerEurekaNodes，大概来说，猜测，应该是代表的是eureka server集群
+        /**
+         * 在处理eureka server集群信息的初始化，会执行PeerEurekaNodes.start()方法
+         */
         PeerEurekaNodes peerEurekaNodes = getPeerEurekaNodes(
                 registry,
                 eurekaServerConfig,
@@ -267,12 +270,19 @@ public class EurekaBootStrap implements ServletContextListener {
 
         registry.init(peerEurekaNodes);
         // 完成eureka-server上下文 context的初始化
+        /**
+         * 会启动PeerEurekaNodes   集群相关
+         */
         serverContext.initialize();
         logger.info("Initialized server context");
 
         // 处理善后的事情，将注册表从相邻eureka节点拷贝注册信息
         // Copy registry from neighboring eureka node
         // 从相邻的一个eureka server节点拷贝注册表的信息，如果拷贝失败，就找下一个
+        /**
+         * 当前这个eureka server会从任何一个其他的eureka server拉取注册表过来放在自己本地，作为初始的注册表。
+         * 将自己作为一个eureka client，找任意一个eureka server来拉取注册表，将拉取到的注册表放到自己本地去。
+         */
         int registryCount = registry.syncUp();
 
         // 初始化自我保护的一分钟期望心跳的值

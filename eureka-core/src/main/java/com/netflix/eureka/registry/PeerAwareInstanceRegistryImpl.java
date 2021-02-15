@@ -217,9 +217,11 @@ public class PeerAwareInstanceRegistryImpl extends AbstractInstanceRegistry impl
         // Copy entire entry from neighboring DS node
         int count = 0;
 
+        // getRegistrySyncRetries 拉取相邻节点没有拉到重试默认5次
         for (int i = 0; ((i < serverConfig.getRegistrySyncRetries()) && (count == 0)); i++) {
             if (i > 0) {
                 try {
+                    // 第一次没拉到，等待30s
                     Thread.sleep(serverConfig.getRegistrySyncRetryWaitMs());
                 } catch (InterruptedException e) {
                     logger.warn("Interrupted during registry transfer..");
@@ -227,6 +229,10 @@ public class PeerAwareInstanceRegistryImpl extends AbstractInstanceRegistry impl
                 }
             }
             // 将自己作为client从其他节点拉取全量注册表
+            // eureka server自己本身本来就是个eureka client，在初始化的时候，就会去找任意的一个eureka server拉取注册表到自己本地来，
+            // 把这个注册表放到自己身上来，作为自己这个eureka server的注册表
+            // DiscoveryClient初始化时候就会从其他sevrer拉取注册表，所以这里直接就获得了
+
             Applications apps = eurekaClient.getApplications();
             for (Application app : apps.getRegisteredApplications()) {
                 for (InstanceInfo instance : app.getInstances()) {
@@ -422,6 +428,13 @@ public class PeerAwareInstanceRegistryImpl extends AbstractInstanceRegistry impl
         }
         super.register(info, leaseDuration, isReplication);
         // 服务实例信息同步其他eureka
+        // 这个方法就会将这次注册请求，同步到其他所有的eureka server上去。。。
+        // 集群相关：如果是某台eureka client来找eureka server进行注册，isReplication是false，
+        // 此时会给其他所有的你配置的eureka server都同步这个注册请求，此时一定会基于jersey，调用其他所有的eureka server的restful接口，去执行这个服务实例的注册的请求
+        /**
+         * eureka-core-jersey2的工程，ReplicationHttpClient，此时同步注册请求给其他eureka server的时候，一定会将isReplication设置为true，
+         * 这个东西可以确保说什么呢，其他eureka server接到这个同步的请求，仅仅在自己本地执行，不会再次向其他的eureka server去进行注册
+         */
         replicateToPeers(Action.Register, info.getAppName(), info.getId(), info, null, isReplication);
     }
 
@@ -663,6 +676,7 @@ public class PeerAwareInstanceRegistryImpl extends AbstractInstanceRegistry impl
                 if (peerEurekaNodes.isThisMyUrl(node.getServiceUrl())) {
                     continue;
                 }
+                // 同步到其他机器
                 replicateInstanceActionsToPeers(action, appName, id, info, newStatus, node);
             }
         } finally {
